@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Streaming Subtitles</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: flex-end; /* Align items at the bottom */
+            background-color: #f0f0f0;
+            position: relative;
+            font-family: Arial, sans-serif;
+        }
+    
+        .subtitle-container {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%); /* Center horizontally */
+            text-align: center;
+            width: 80%;
+            display: flex;
+            flex-direction: column;
+            gap: 10px; /* Space between subtitle boxes */
+            margin-bottom: 20px; /* Space from the bottom */
+        }
+    
+        .subtitle-box {
+            font-size: 24px;
+            font-weight: bold;
+            color: #333;
+            background-color: rgba(255, 255, 255, 0.8);
+            padding: 10px;
+            border-radius: 8px;
+            display: none; /* Initially hidden */
+        }
+    
+        .buttons {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            gap: 10px;
+        }
+    
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            font-weight: bold;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+    
+        #start {
+            background-color: #28a745;
+            color: white;
+        }
+    
+        #stop {
+            background-color: #dc3545;
+            color: white;
+        }
+    
+        /* Styles for disabled buttons */
+        button:disabled {
+            background-color: #ccc !important; /* Force background color */
+            color: #666 !important; /* Force text color */
+            cursor: not-allowed; /* Change cursor to not-allowed */
+        }
+    
+        button:disabled:hover,
+        button:disabled:active {
+            background-color: #ccc !important; /* Force background color */
+            color: #666 !important; /* Force text color */
+        }
+    
+        .select-lang {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            display: flex;
+            gap: 10px;
+        }
+    
+        select {
+            padding: 10px;
+            font-size: 16px;
+            border-radius: 5px;
+        }
+    </style>    
+</head>
+<body>
+
+    <div class="select-lang">
+        <label for="english-lang">English Subtitle: </label>
+        <select id="english-lang">
+            <option value="none">None</option>
+            <option value="english">English</option>
+            <option value="french">French</option>
+        </select>
+
+        <label for="arabic-lang">Arabic Subtitle: </label>
+        <select id="arabic-lang">
+            <option value="none">None</option>
+            <option value="arabic">Arabic</option>
+            <option value="turkish">Turkish</option>
+        </select>
+
+        <label for="persian-lang">Persian Subtitle: </label>
+        <select id="persian-lang">
+            <option value="none">None</option>
+            <option value="persian">Persian</option>
+            <option value="urdu">Urdu</option>
+        </select>
+    </div>
+
+    <div class="subtitle-container">
+        <div id="english-subtitle" class="subtitle-box">English subtitles will appear here...</div>
+        <div id="arabic-subtitle" class="subtitle-box">Arabic subtitles will appear here...</div>
+        <div id="persian-subtitle" class="subtitle-box">Persian subtitles will appear here...</div>
+    </div>
+
+    <div class="buttons">
+        <button id="start">Start Recording</button>
+        <button id="stop" disabled>Stop Recording</button>
+    </div>
+
+    <script>
+        let websocket;
+        let audioContext;
+        let processor;
+        // let audioChunks = [];
+
+        // Function to display subtitle boxes based on language selection
+        function updateSubtitleBoxes() {
+            const englishLang = document.getElementById('english-lang').value;
+            const arabicLang = document.getElementById('arabic-lang').value;
+            const persianLang = document.getElementById('persian-lang').value;
+
+            document.getElementById('english-subtitle').style.display = englishLang !== 'none' ? 'block' : 'none';
+            document.getElementById('arabic-subtitle').style.display = arabicLang !== 'none' ? 'block' : 'none';
+            document.getElementById('persian-subtitle').style.display = persianLang !== 'none' ? 'block' : 'none';
+        }
+
+        // Add event listeners to the language select elements
+        document.getElementById('english-lang').addEventListener('change', updateSubtitleBoxes);
+        document.getElementById('arabic-lang').addEventListener('change', updateSubtitleBoxes);
+        document.getElementById('persian-lang').addEventListener('change', updateSubtitleBoxes);
+
+        // Start recording and streaming audio
+        document.getElementById('start').addEventListener('click', async () => {
+            // Disable start button and enable stop button
+            document.getElementById('start').disabled = true;
+            document.getElementById('stop').disabled = false;
+
+            websocket = new WebSocket('ws://localhost:2800');
+
+            websocket.onopen = async() => {
+                console.log("WebSocket is open now.");
+                // Send the selected languages to the server
+                const selectedLanguages = {
+                    english: document.getElementById('english-lang').value,
+                    arabic: document.getElementById('arabic-lang').value,
+                    persian: document.getElementById('persian-lang').value
+                };
+                websocket.send(JSON.stringify({ config: selectedLanguages }));
+
+                // Initialize audio context with the system's default sample rate
+                audioContext = new AudioContext();
+
+                // Get access to the microphone (at its default sample rate)
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+                // Create a media stream source for processing the audio
+                const source = audioContext.createMediaStreamSource(stream);
+
+                // Create a ScriptProcessor with a buffer size of 4096 samples (can adjust)
+                processor = audioContext.createScriptProcessor(16384, 1, 1);
+
+                // Process the audio in smaller chunks, and resample to 16 kHz
+                processor.onaudioprocess = async (event) => {
+                    const inputBuffer = event.inputBuffer;
+                    const inputData = inputBuffer.getChannelData(0); // Mono audio (1st channel)
+
+                    // Resample the audio to 16 kHz before sending
+                    const resampledData = await resampleAudio(inputData, audioContext.sampleRate, 16000);
+
+                    // Convert Float32Array (from MediaStream) to 16-bit PCM
+                    const pcmData = convertFloat32ToPCM(resampledData);
+
+                    // Log audio data for debugging
+                    console.log("Processing and resampling audio chunk:", pcmData);
+
+                    // Send the PCM data to the WebSocket server if it's ready
+                    if (websocket.readyState === WebSocket.OPEN) {
+                        websocket.send(pcmData);
+                        console.log("Resampled audio chunk sent to server");
+                    } else {
+                        console.error("WebSocket is not open yet");
+                    }
+                };
+
+                // Connect the audio nodes: source -> processor -> destination
+                source.connect(processor);
+                processor.connect(audioContext.destination);
+            };
+
+            websocket.onerror = (error) => {
+                console.error("WebSocket Error:", error);
+            };
+
+            websocket.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+
+                // Display the received subtitle text
+                if (data.eng_Latn) {
+                    document.getElementById('english-subtitle').innerText = data.eng_Latn;
+                }
+                if (data.arb_Arab) {
+                    document.getElementById('arabic-subtitle').innerText = data.arb_Arab;
+                }
+                if (data.pes_Arab) {
+                    document.getElementById('persian-subtitle').innerText = data.pes_Arab;
+                }
+            };
+        });
+
+        // Stop recording
+        document.getElementById('stop').addEventListener('click', () => {
+            if (processor) {
+                processor.disconnect(); // Stop audio processing
+            }
+            if (audioContext) {
+                audioContext.close(); // Close the audio context
+            }
+            if (websocket) {
+                websocket.send(JSON.stringify({ eof: 1 }));
+                websocket.close(); // Close the WebSocket connection
+            }
+
+            document.getElementById('start').disabled = false;
+            document.getElementById('stop').disabled = true;
+        });
+        
+        // Function to convert Float32Array to 16-bit PCM
+        function convertFloat32ToPCM(float32Array) {
+            const pcmArray = new Int16Array(float32Array.length);
+
+            for (let i = 0; i < float32Array.length; i++) {
+                const sample = float32Array[i];
+
+                // Clamp and scale the float values from [-1, 1] to [-32768, 32767] for 16-bit
+                const clampedSample = Math.max(-1, Math.min(1, sample));
+                pcmArray[i] = clampedSample < 0 ? clampedSample * 32768 : clampedSample * 32767;
+            }
+
+            return pcmArray.buffer; // Return ArrayBuffer to send via WebSocket
+        }
+
+        // Function to resample audio to a different sample rate (e.g., 16 kHz)
+        function resampleAudio(audioBuffer, originalSampleRate, targetSampleRate) {
+            const resampleRatio = originalSampleRate / targetSampleRate;
+            const newLength = Math.round(audioBuffer.length / resampleRatio);
+            const resampledBuffer = new Float32Array(newLength);
+
+            // Simple nearest-neighbor resampling (basic method)
+            for (let i = 0; i < newLength; i++) {
+                const nearestIndex = Math.round(i * resampleRatio);
+                resampledBuffer[i] = audioBuffer[nearestIndex];
+            }
+
+            return resampledBuffer;
+        }
+    </script>
+
+</body>
+</html>
