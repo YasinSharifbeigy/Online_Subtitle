@@ -31,12 +31,12 @@ First, clone the repository from GitHub:
 ### Step 2: Install the required libraries
 
 The libraries used in this project are listed in the requirements.txt file. You can install them using pip.
-## For Linux (with CUDA 12.2 support)
+#### For Linux (with CUDA 12.2 support)
 ```bash
 pip install -r requirements.txt
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu122
 ```
-## For Windows (with CUDA 12.2 support)
+#### For Windows (with CUDA 12.2 support)
 ```bash
 pip install -r requirements.txt
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu122
@@ -61,26 +61,6 @@ python live_transcription.py
 ```
 Ensure that your audio input device (e.g., microphone) is properly configured for real-time processing.
 
-### Supported Libraries
-This project uses the following Python libraries:
-    NumPy: For numerical computations.
-    Librosa: For audio feature extraction.
-    WebSockets: For WebSocket communication.
-    Downloader: To manage data downloads.
-    PyTorch: For machine learning and deep learning models with CUDA support.
-    CTranslate2: Optimized inference engine supporting CUDA.
-    Transformers: For pre-trained NLP models.
-    FastText: For fast and efficient text classification and word representation.
-    SentencePiece: For tokenization.
-    NLTK: For natural language processing.
-    OpenAI Whisper: For transcription using Whisper models.
-    Faster Whisper: Optimized version of Whisper with CUDA support.
-    Silero VAD: For voice activity detection.
-    SpeechBrain: For speech processing and analysis.
-    SciPy: For scientific computing.
-    Pandas: For data analysis and manipulation.
-    Tqdm: For progress bars.
-
 ## Supported Libraries
 - [PyTorch](https://pytorch.org/) - For machine learning and deep learning models.
 - [Librosa](https://librosa.org/) - For audio feature extraction.
@@ -96,11 +76,11 @@ This project uses the following Python libraries:
 - [OpenAI Whisper](https://github.com/openai/whisper): For transcription using Whisper models.
 - And more...
 
-### Contribution
+## Contribution
 
 Feel free to contribute to this project by opening a pull request or reporting issues.
 
-### License
+## License
 
 This project is licensed under the MIT License. See the LICENSE file for details.
 
