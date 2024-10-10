@@ -98,32 +98,35 @@
 <body>
 
     <div class="select-lang">
-        <label for="english-lang">English Subtitle: </label>
-        <select id="english-lang">
-            <option value="none">None</option>
+        <label for="first-lang">First Language: </label>
+        <select id="first-lang">
+            <option value="None">None</option>
+            <option value="فارسی">فارسی</option>
             <option value="english">English</option>
-            <option value="french">French</option>
+            <option value="العربية">العربية</option>
         </select>
 
-        <label for="arabic-lang">Arabic Subtitle: </label>
-        <select id="arabic-lang">
-            <option value="none">None</option>
-            <option value="arabic">Arabic</option>
-            <option value="turkish">Turkish</option>
+        <label for="second-lang">Second Language: </label>
+        <select id="second-lang">
+            <option value="None">None</option>
+            <option value="فارسی">فارسی</option>
+            <option value="english">English</option>
+            <option value="العربية">العربية</option>
         </select>
 
-        <label for="persian-lang">Persian Subtitle: </label>
-        <select id="persian-lang">
-            <option value="none">None</option>
-            <option value="persian">Persian</option>
-            <option value="urdu">Urdu</option>
+        <label for="third-lang">Third Language: </label>
+        <select id="third-lang">
+            <option value="None">None</option>
+            <option value="فارسی">فارسی</option>
+            <option value="english">English</option>
+            <option value="العربية">العربية</option>
         </select>
     </div>
 
     <div class="subtitle-container">
-        <div id="english-subtitle" class="subtitle-box">English subtitles will appear here...</div>
-        <div id="arabic-subtitle" class="subtitle-box">Arabic subtitles will appear here...</div>
-        <div id="persian-subtitle" class="subtitle-box">Persian subtitles will appear here...</div>
+        <div id="first-subtitle" class="subtitle-box">... First subtitles ...</div>
+        <div id="second-subtitle" class="subtitle-box">... Second subtitle ...</div>
+        <div id="third-subtitle" class="subtitle-box">... Third subtitle ...</div>
     </div>
 
     <div class="buttons">
@@ -135,41 +138,76 @@
         let websocket;
         let audioContext;
         let processor;
-        // let audioChunks = [];
+        const languages = {
+            'None': 'None',
+            'فارسی': 'persian',
+            'العربية': 'arabic',
+            'english': 'english'
+        };
 
-        // Function to display subtitle boxes based on language selection
+        // Function to send updated language configuration to the server
+        function sendLanguageConfig(firstLang, secondLang, thirdLang) {
+            if (websocket && websocket.readyState === WebSocket.OPEN) {
+                const selectedLanguages = {
+                    first: firstLang,
+                    second: secondLang,
+                    third: thirdLang
+                };
+
+                console.log("Sending new language configuration to server:", selectedLanguages);
+                websocket.send(JSON.stringify({ config: selectedLanguages }));
+            }
+        }
+
+        // Function to update subtitle boxes and send the new language configuration
         function updateSubtitleBoxes() {
-            const englishLang = document.getElementById('english-lang').value;
-            const arabicLang = document.getElementById('arabic-lang').value;
-            const persianLang = document.getElementById('persian-lang').value;
+            let firstLang = languages[document.getElementById('first-lang').value];
+            let secondLang = languages[document.getElementById('second-lang').value];
+            let thirdLang = languages[document.getElementById('third-lang').value];
 
-            document.getElementById('english-subtitle').style.display = englishLang !== 'none' ? 'block' : 'none';
-            document.getElementById('arabic-subtitle').style.display = arabicLang !== 'none' ? 'block' : 'none';
-            document.getElementById('persian-subtitle').style.display = persianLang !== 'none' ? 'block' : 'none';
+            if (secondLang == firstLang) {
+                secondLang = 'None';
+            }
+            if (thirdLang == secondLang || thirdLang == firstLang) {
+                thirdLang = 'None';
+            }
+
+            document.getElementById('first-subtitle').style.display = firstLang !== 'None' ? 'block' : 'none';
+            document.getElementById('second-subtitle').style.display = secondLang !== 'None' ? 'block' : 'none';
+            document.getElementById('third-subtitle').style.display = thirdLang !== 'None' ? 'block' : 'none';
+
+            // Send the new language configuration to the server
+            sendLanguageConfig(firstLang, secondLang, thirdLang);
         }
 
         // Add event listeners to the language select elements
-        document.getElementById('english-lang').addEventListener('change', updateSubtitleBoxes);
-        document.getElementById('arabic-lang').addEventListener('change', updateSubtitleBoxes);
-        document.getElementById('persian-lang').addEventListener('change', updateSubtitleBoxes);
+        document.getElementById('first-lang').addEventListener('change', updateSubtitleBoxes);
+        document.getElementById('second-lang').addEventListener('change', updateSubtitleBoxes);
+        document.getElementById('third-lang').addEventListener('change', updateSubtitleBoxes);
 
         // Start recording and streaming audio
         document.getElementById('start').addEventListener('click', async () => {
-            // Disable start button and enable stop button
+            // Disable start button and enable stop button 
             document.getElementById('start').disabled = true;
             document.getElementById('stop').disabled = false;
 
             websocket = new WebSocket('ws://localhost:2800');
 
-            websocket.onopen = async() => {
+            websocket.onopen = async () => {
                 console.log("WebSocket is open now.");
-                // Send the selected languages to the server
-                const selectedLanguages = {
-                    english: document.getElementById('english-lang').value,
-                    arabic: document.getElementById('arabic-lang').value,
-                    persian: document.getElementById('persian-lang').value
-                };
-                websocket.send(JSON.stringify({ config: selectedLanguages }));
+                // Send the initial selected languages to the server
+
+                let firstLang = languages[document.getElementById('first-lang').value];
+                let secondLang = languages[document.getElementById('second-lang').value];
+                let thirdLang = languages[document.getElementById('third-lang').value];
+
+                if (secondLang == firstLang) {
+                    secondLang = 'None';
+                }
+                if (thirdLang == secondLang || thirdLang == firstLang) {
+                    thirdLang = 'None';
+                }
+                sendLanguageConfig(firstLang, secondLang, thirdLang);
 
                 // Initialize audio context with the system's default sample rate
                 audioContext = new AudioContext();
@@ -194,9 +232,6 @@
                     // Convert Float32Array (from MediaStream) to 16-bit PCM
                     const pcmData = convertFloat32ToPCM(resampledData);
 
-                    // Log audio data for debugging
-                    console.log("Processing and resampling audio chunk:", pcmData);
-
                     // Send the PCM data to the WebSocket server if it's ready
                     if (websocket.readyState === WebSocket.OPEN) {
                         websocket.send(pcmData);
@@ -219,14 +254,14 @@
                 const data = JSON.parse(event.data);
 
                 // Display the received subtitle text
-                if (data.eng_Latn) {
-                    document.getElementById('english-subtitle').innerText = data.eng_Latn;
+                if (data.first) {
+                    document.getElementById('first-subtitle').innerText = data.first;
                 }
-                if (data.arb_Arab) {
-                    document.getElementById('arabic-subtitle').innerText = data.arb_Arab;
+                if (data.second) {
+                    document.getElementById('second-subtitle').innerText = data.second;
                 }
-                if (data.pes_Arab) {
-                    document.getElementById('persian-subtitle').innerText = data.pes_Arab;
+                if (data.third) {
+                    document.getElementById('third-subtitle').innerText = data.third;
                 }
             };
         });
@@ -244,10 +279,14 @@
                 websocket.close(); // Close the WebSocket connection
             }
 
+            document.getElementById('first-subtitle').style.display = 'none';
+            document.getElementById('second-subtitle').style.display = 'none';
+            document.getElementById('third-subtitle').style.display = 'none';
+
             document.getElementById('start').disabled = false;
             document.getElementById('stop').disabled = true;
         });
-        
+
         // Function to convert Float32Array to 16-bit PCM
         function convertFloat32ToPCM(float32Array) {
             const pcmArray = new Int16Array(float32Array.length);
@@ -277,6 +316,7 @@
 
             return resampledBuffer;
         }
+
     </script>
 
 </body>
