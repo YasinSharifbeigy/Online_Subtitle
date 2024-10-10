@@ -2,25 +2,15 @@
 
 import json
 import os
-import sys
 import asyncio
-import pathlib
 import websockets
 import concurrent.futures
 import logging
-import soundfile as sf
 import numpy as np
 import torch
 import time
 import threading
 import json
-from openai import OpenAI
-sys.path.append("/home/yasin/whispering-tiger/whispering")
-from audio_processor import VAD, STT_model
-from gradio_client import Client
-import wave
-import librosa
-import sounddevice as sd
 from stream_processor import online_processor
 import text_processor_helper as lang_helper
 
