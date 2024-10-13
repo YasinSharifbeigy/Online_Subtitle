@@ -138,13 +138,17 @@
         let websocket;
         let audioContext;
         let processor;
+        let firstSubtitleTimeout;  // Declare global timeout variables
+        let secondSubtitleTimeout;
+        let thirdSubtitleTimeout;
+    
         const languages = {
             'None': 'None',
             'فارسی': 'persian',
             'العربية': 'arabic',
             'english': 'english'
         };
-
+    
         // Function to send updated language configuration to the server
         function sendLanguageConfig(firstLang, secondLang, thirdLang) {
             if (websocket && websocket.readyState === WebSocket.OPEN) {
@@ -153,54 +157,53 @@
                     second: secondLang,
                     third: thirdLang
                 };
-
+    
                 console.log("Sending new language configuration to server:", selectedLanguages);
                 websocket.send(JSON.stringify({ config: selectedLanguages }));
             }
         }
-
+    
         // Function to update subtitle boxes and send the new language configuration
         function updateSubtitleBoxes() {
             let firstLang = languages[document.getElementById('first-lang').value];
             let secondLang = languages[document.getElementById('second-lang').value];
             let thirdLang = languages[document.getElementById('third-lang').value];
-
+    
             if (secondLang == firstLang) {
                 secondLang = 'None';
             }
             if (thirdLang == secondLang || thirdLang == firstLang) {
                 thirdLang = 'None';
             }
-
+    
             document.getElementById('first-subtitle').style.display = firstLang !== 'None' ? 'block' : 'none';
             document.getElementById('second-subtitle').style.display = secondLang !== 'None' ? 'block' : 'none';
             document.getElementById('third-subtitle').style.display = thirdLang !== 'None' ? 'block' : 'none';
-
+    
             // Send the new language configuration to the server
             sendLanguageConfig(firstLang, secondLang, thirdLang);
         }
-
+    
         // Add event listeners to the language select elements
         document.getElementById('first-lang').addEventListener('change', updateSubtitleBoxes);
         document.getElementById('second-lang').addEventListener('change', updateSubtitleBoxes);
         document.getElementById('third-lang').addEventListener('change', updateSubtitleBoxes);
-
+    
         // Start recording and streaming audio
         document.getElementById('start').addEventListener('click', async () => {
             // Disable start button and enable stop button 
             document.getElementById('start').disabled = true;
             document.getElementById('stop').disabled = false;
-
+    
             websocket = new WebSocket('ws://localhost:2800');
-
+    
             websocket.onopen = async () => {
                 console.log("WebSocket is open now.");
-                // Send the initial selected languages to the server
-
+                
                 let firstLang = languages[document.getElementById('first-lang').value];
                 let secondLang = languages[document.getElementById('second-lang').value];
                 let thirdLang = languages[document.getElementById('third-lang').value];
-
+    
                 if (secondLang == firstLang) {
                     secondLang = 'None';
                 }
@@ -208,31 +211,19 @@
                     thirdLang = 'None';
                 }
                 sendLanguageConfig(firstLang, secondLang, thirdLang);
-
-                // Initialize audio context with the system's default sample rate
+    
                 audioContext = new AudioContext();
-
-                // Get access to the microphone (at its default sample rate)
                 const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-
-                // Create a media stream source for processing the audio
                 const source = audioContext.createMediaStreamSource(stream);
-
-                // Create a ScriptProcessor with a buffer size of 4096 samples (can adjust)
                 processor = audioContext.createScriptProcessor(16384, 1, 1);
-
-                // Process the audio in smaller chunks, and resample to 16 kHz
+    
                 processor.onaudioprocess = async (event) => {
                     const inputBuffer = event.inputBuffer;
-                    const inputData = inputBuffer.getChannelData(0); // Mono audio (1st channel)
-
-                    // Resample the audio to 16 kHz before sending
+                    const inputData = inputBuffer.getChannelData(0);
+    
                     const resampledData = await resampleAudio(inputData, audioContext.sampleRate, 16000);
-
-                    // Convert Float32Array (from MediaStream) to 16-bit PCM
                     const pcmData = convertFloat32ToPCM(resampledData);
-
-                    // Send the PCM data to the WebSocket server if it's ready
+    
                     if (websocket.readyState === WebSocket.OPEN) {
                         websocket.send(pcmData);
                         console.log("Resampled audio chunk sent to server");
@@ -240,84 +231,109 @@
                         console.error("WebSocket is not open yet");
                     }
                 };
-
-                // Connect the audio nodes: source -> processor -> destination
+    
                 source.connect(processor);
                 processor.connect(audioContext.destination);
             };
-
+    
             websocket.onerror = (error) => {
                 console.error("WebSocket Error:", error);
             };
-
+    
             websocket.onmessage = (event) => {
                 const data = JSON.parse(event.data);
-
-                // Display the received subtitle text
-                if (data.first) {
-                    document.getElementById('first-subtitle').innerText = data.first;
+                const sub = data.subtitle;
+                const duration = data.duration; 
+    
+                console.log("Received subtitles:", sub);
+                console.log("Duration:", duration);
+    
+                if (sub.first) {
+                    const firstSubtitle = document.getElementById('first-subtitle');
+                    firstSubtitle.innerText = sub.first;
+                    firstSubtitle.style.display = 'block';
+                    console.log("First subtitle displayed:", sub.first);
+    
+                    clearTimeout(firstSubtitleTimeout);
+                    firstSubtitleTimeout = setTimeout(() => {
+                        firstSubtitle.style.display = 'none';
+                        firstSubtitle.innerText = '';  
+                        console.log("First subtitle hidden");
+                    }, duration);
                 }
-                if (data.second) {
-                    document.getElementById('second-subtitle').innerText = data.second;
+    
+                if (sub.second) {
+                    const secondSubtitle = document.getElementById('second-subtitle');
+                    secondSubtitle.innerText = sub.second;
+                    secondSubtitle.style.display = 'block';
+                    console.log("Second subtitle displayed:", sub.second);
+    
+                    clearTimeout(secondSubtitleTimeout);
+                    secondSubtitleTimeout = setTimeout(() => {
+                        secondSubtitle.style.display = 'none';
+                        secondSubtitle.innerText = '';  
+                        console.log("Second subtitle hidden");
+                    }, duration);
                 }
-                if (data.third) {
-                    document.getElementById('third-subtitle').innerText = data.third;
+    
+                if (sub.third) {
+                    const thirdSubtitle = document.getElementById('third-subtitle');
+                    thirdSubtitle.innerText = sub.third;
+                    thirdSubtitle.style.display = 'block';
+                    console.log("Third subtitle displayed:", sub.third);
+    
+                    clearTimeout(thirdSubtitleTimeout);
+                    thirdSubtitleTimeout = setTimeout(() => {
+                        thirdSubtitle.style.display = 'none';
+                        thirdSubtitle.innerText = '';  
+                        console.log("Third subtitle hidden");
+                    }, duration);
                 }
             };
+    
         });
-
-        // Stop recording
+    
         document.getElementById('stop').addEventListener('click', () => {
             if (processor) {
-                processor.disconnect(); // Stop audio processing
+                processor.disconnect();
             }
             if (audioContext) {
-                audioContext.close(); // Close the audio context
+                audioContext.close();
             }
             if (websocket) {
                 websocket.send(JSON.stringify({ eof: 1 }));
-                websocket.close(); // Close the WebSocket connection
+                websocket.close();
             }
-
+    
             document.getElementById('first-subtitle').style.display = 'none';
             document.getElementById('second-subtitle').style.display = 'none';
             document.getElementById('third-subtitle').style.display = 'none';
-
+    
             document.getElementById('start').disabled = false;
             document.getElementById('stop').disabled = true;
         });
-
-        // Function to convert Float32Array to 16-bit PCM
+    
         function convertFloat32ToPCM(float32Array) {
             const pcmArray = new Int16Array(float32Array.length);
-
             for (let i = 0; i < float32Array.length; i++) {
                 const sample = float32Array[i];
-
-                // Clamp and scale the float values from [-1, 1] to [-32768, 32767] for 16-bit
                 const clampedSample = Math.max(-1, Math.min(1, sample));
                 pcmArray[i] = clampedSample < 0 ? clampedSample * 32768 : clampedSample * 32767;
             }
-
-            return pcmArray.buffer; // Return ArrayBuffer to send via WebSocket
+            return pcmArray.buffer;
         }
-
-        // Function to resample audio to a different sample rate (e.g., 16 kHz)
+    
         function resampleAudio(audioBuffer, originalSampleRate, targetSampleRate) {
             const resampleRatio = originalSampleRate / targetSampleRate;
             const newLength = Math.round(audioBuffer.length / resampleRatio);
             const resampledBuffer = new Float32Array(newLength);
-
-            // Simple nearest-neighbor resampling (basic method)
             for (let i = 0; i < newLength; i++) {
                 const nearestIndex = Math.round(i * resampleRatio);
                 resampledBuffer[i] = audioBuffer[nearestIndex];
             }
-
             return resampledBuffer;
         }
-
-    </script>
-
+    
+    </script>    
 </body>
 </html>

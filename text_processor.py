@@ -141,21 +141,23 @@ class Translator():
                 break
 
         if language_unsupported:
-            return text, (src_lang, tar_lang)
+            return dict(), src_lang
         
+        translation_multilang = {lang: None for lang in tar_lang}
+
         if src_lang in tar_lang:
+            translation_multilang[src_lang] = text
             tar_lang.remove(src_lang)
             N_lang = len(tar_lang)
 
         if len(tar_lang) == 0:
-            return text, (src_lang, tar_lang)
+            return translation_multilang, src_lang
 
         # Split the source text into sentences
         # print("sentence_split .. \n")
         if split_sentence:
             sentences = self.sentence_splitor.split_to_sentence(text, language=src_lang)
         else: sentences = [text]
-        translation_multilang = {lang: None for lang in tar_lang}
         subwords = []
         for sentence in sentences:
             # Tokenize the source text

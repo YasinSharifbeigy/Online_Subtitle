@@ -2,15 +2,25 @@
 
 import json
 import os
+import sys
 import asyncio
+import pathlib
 import websockets
 import concurrent.futures
 import logging
+import soundfile as sf
 import numpy as np
 import torch
 import time
 import threading
 import json
+from openai import OpenAI
+sys.path.append("/home/yasin/whispering-tiger/whispering")
+from audio_processor import VAD, STT_model
+from gradio_client import Client
+import wave
+import librosa
+import sounddevice as sd
 from stream_processor import online_processor
 import text_processor_helper as lang_helper
 
@@ -26,14 +36,26 @@ last_chunck_speech = False
 request_uncomplete = ""
 packet_length = 1048576
 audio_queue_lock = threading.Lock()
+indexes = {1: 'first', 2: 'second', 3: 'third'}
 
-async def manage_subtitle(websocket, text_dict: dict):
-    # text = ""
-    # for lang in text_dict:
-    #     text += lang + " : " + text_dict[lang]
+
+
+def empty_queue(q: asyncio.Queue):
+  while not q.empty():
+    # Depending on your program, you may want to
+    # catch QueueEmpty
+    q.get_nowait()
+    q.task_done()
+
+
+
+async def manage_subtitle(websocket, text_dict: dict, audio_length):
     print("mng_sub:   ", text_dict)
-    await websocket.send(json.dumps(text_dict))
-    # for lang in text_dict:
+    response = {"subtitle": dict(), "duration": audio_length/16} #duration should be in ms
+    for i, lang in enumerate(text_dict):
+        response["subtitle"][indexes[i+1]] = text_dict[lang]
+    await websocket.send(json.dumps(response))
+
 
 
 async def process(websocket, min_chunk = 1):
@@ -50,7 +72,9 @@ async def process(websocket, min_chunk = 1):
     stop = False
     loop = asyncio.get_running_loop()
     while True:
-        if stop: break
+        if stop:
+            empty_queue(audio_queue)
+            break
         audio_length, queue_length = (len(audio) + audio_queue_length, audio_queue.qsize())
         print("process:   audio_length = ", audio_length/16000, " and length of remain audio = ", len(audio)/16000)
         if audio_length < min_chunk*16000:
@@ -69,19 +93,16 @@ async def process(websocket, min_chunk = 1):
         else:
             # print("process:   tar_lang = ", processor.langs)
             transcription_data = await loop.run_in_executor(None, processor.process_iter, audio, voice_activity)
-            src_lang, transcription, translation, next_begin = transcription_data
+            _, transcription, translation, next_begin = transcription_data
             print("process:   transcription = ", transcription)
             print("process:   audio_duration = ", audio_length/16000, ", process_time = ", time.time() - s)
-            translation[src_lang]= transcription
-            await manage_subtitle(websocket, translation)
+            if transcription:
+                await manage_subtitle(websocket, translation, audio_length)
         print("process:   next_begin = ",next_begin)
         if next_begin is not None: audio = audio[np.floor(next_begin*16000).astype(int):]
         else: audio = np.array([], dtype= np.float32)
-        if stop:
-            break
+
     
-# def process_thread(websocket, loop, min_chunk = 1):
-#     asyncio.run_coroutine_threadsafe(process(websocket, min_chunk), loop)
 
 def process_thread(websocket, min_chunk=1.5):
     # Create a new event loop for this thread
@@ -89,6 +110,8 @@ def process_thread(websocket, min_chunk=1.5):
     asyncio.set_event_loop(loop)
     loop.run_until_complete(process(websocket, min_chunk))
     loop.close()
+
+
 
 async def recognize(websocket, path):
     print("first of RECOGNIZE ....")
@@ -122,10 +145,10 @@ async def recognize(websocket, path):
             jobj = json.loads(message)['config']
             logging.info("Config %s", jobj)
             langs = []
-            for lang in jobj:
-                if jobj[lang] != 'none':
-                    langs.append(lang_helper.STREAM_SUPPURTED_LANGUAGES_FLORES_200[lang])
-            processor.langs = langs
+            for sub in jobj:
+                if jobj[sub] != 'None':
+                    langs.append(lang_helper.STREAM_SUPPURTED_LANGUAGES_FLORES_200[jobj[sub]])
+            processor.langs = langs.copy()
             print("recognize: ", langs)
             if 'phrase_list' in jobj:
                 phrase_list = jobj['phrase_list']
@@ -141,8 +164,10 @@ async def recognize(websocket, path):
             continue
 
         # Create the recognizer, word list is temporary disabled since not every model supports it
-        if message == '{"eof" : 1}':
+        if isinstance(message, str) and "eof" in message:
             stop = True
+            with audio_queue_lock:
+                audio_queue_length -= len(temp)
             break
         temp = np.frombuffer(message, dtype=np.int16).astype(np.float32)/2**15
         audio_queue.put_nowait(temp)

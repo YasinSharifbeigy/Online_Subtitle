@@ -51,14 +51,14 @@ class online_processor():
         print("preprocess:", speech_timestamps)
         return speech_timestamps
     
-    def process_iter(self, audio, voice_activity, lid_min_pob= 0.4, last_activity_threshold = 0.5, max_audio_length = 8, min_audio_length = 2):
+    def process_iter(self, audio, voice_activity, lid_min_pob= 0.4, max_nonactivity_threshold = 0.5, max_audio_length = 8, min_audio_length = 2):
         lang, lang_prob = self.LID_model.predict_language(torch.from_numpy(audio), langs= 'razi') 
         if lang_prob > lid_min_pob: 
             new_lang = lang.split(": ")[0]
             if self.last_lang != new_lang: self.textbuffer = ""
             self.last_lang = new_lang
         audio_dur = len(audio)/16000
-        if audio_dur - voice_activity[-1]['end']/16000 > 0.5:
+        if audio_dur - voice_activity[-1]['end']/16000 > max_nonactivity_threshold:
             # audio = self.VAD_model.cut_silence(audio, voice_activity)
             do_del_last_words = False
             next_begin = None
@@ -84,8 +84,8 @@ class online_processor():
         if transcription:
             # transcription_senteces = self.Translator_model.sentence_splitor.split_to_sentence(self.textbuffer + transcription, src_lang)
             # self.textbuffer = transcription_senteces[-1]
-            # print("process_on:src_lang:  ", src_lang)
-            # print("process_on:tar_lang:  ", self.langs)
+            print("process_on:src_lang:  ", src_lang)
+            print("process_on:tar_lang:  ", self.langs)
             translation, _ = self.Translator_model.translate(transcription, self.langs.copy(), src_lang)
         else:
             translation = dict()
