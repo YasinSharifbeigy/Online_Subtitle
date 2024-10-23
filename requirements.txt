@@ -17,7 +17,8 @@ nltk>=3.6.7
 
 # Whisper (OpenAI and Faster Whisper)
 openai-whisper>=0.0.1
-faster-whisper>=0.1.1
+-e git+https://github.com/m-bain/whisperX.git#egg=whisperX
+faster-whisper>=1.0.3
 
 # Voice Activity Detection
 silero_vad>=0.4

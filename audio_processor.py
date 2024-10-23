@@ -4,11 +4,12 @@ import faster_whisper
 import whisper
 from pathlib import Path
 import os
-from typing import Union
+from typing import Union, Optional
 import librosa
 from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor, pipeline, GenerationConfig
 from silero_vad import get_speech_timestamps, collect_chunks
 from speechbrain.inference.classifiers import EncoderClassifier
+import whisperx
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -105,7 +106,7 @@ class LID():
                 lang = self.razi_ind2langs[inxs[ind.item()]]
         return  lang, prob # (language, probablity)
 
-STT_SUPPORTED_MODELS = {'whisper-transformers': "", 'whisper-openai': "openai.pt", 'faster-whisper': "ct2"}
+STT_SUPPORTED_MODELS = {'whisper-transformers': "", 'whisper-openai': "openai.pt", 'faster-whisper': "ct2", "whisperX": "ct2"}
 WHISPER_MODEL_SIZE = ['tiny', 'base', 'small', 'medium', 'large', 'large-v2', 'large-v3']
 STT_MODELs_LOCAL_PATH = {}
 # for model_type in STT_SUPPORTED_MODELS:
@@ -120,6 +121,7 @@ STT_MODELs_LOCAL_PATH = {}
 class STT_model():
     def __init__(self, model = None):
         self.model = model
+        self.aligning_models = dict()
         self.utils = None
         self.processor = None
         self.pipe = None
@@ -127,6 +129,7 @@ class STT_model():
         self.model_type = None
         self.local = False
         self.cache_path = ".cache" + "/whisper/"
+        self.device = device
 
     def load_model(self, model_type = None, fine_tuned = None, model_size = None, model_path = None, whisper_config_path = None, **kwargs):
         self.model_type = model_type
@@ -161,6 +164,21 @@ class STT_model():
                 path_or_size = self.cache_path if self.local else self.model_size
                 self.model = faster_whisper.WhisperModel(path_or_size, device= device, 
                                                          local_files_only= self.local, download_root= self.cache_path)
+            elif self.model_type == "whisperX":
+                os.system("./start.sh")
+                path_or_size = self.cache_path if self.local else self.model_size
+                try:
+                    self.model = whisperx.load_model(".cache/whisper/medium-ct2", device= 'cuda', compute_type= "float16", asr_options= {"hotwords": None})
+                except:
+                    self.model = whisperx.load_model(".cache/whisper/medium-ct2", device= 'cuda', compute_type= "float32", asr_options= {"hotwords": None})
+                if 'language' in kwargs:
+                    if 'device' in kwargs: self.device = kwargs['device']
+                    if isinstance(kwargs['language'], str):
+                        language = kwargs['language']
+                        self.load_aligning_model(language= language, device= self.device)
+                    else:
+                        for language in kwargs['language']:
+                            self.load_aligning_model(language= language, device= self.device)
             elif self.model_type == "whisper-openai":
                 path_or_size = self.cache_path if self.local else self.model_size
                 self.model = whisper.load_model(path_or_size, device= device, download_root= self.cache_path)
@@ -179,18 +197,22 @@ class STT_model():
             self.local = False
             print("Error loading STT model.")
             raise(e)
-
             # segment = model.transcribe('test/test_per_2s.wav',beam_size=5, language= "fa",word_timestamps=True)
             #{'text':, 'segments': [{'id':, 'start':, 'end':, 'text':, 'tokens':[], 'words':[{'word':, 'start':, 'end':, 'probablity':}, ...]}, ...]}
         #load directly from huggingface for faster_whisper, whisper_openai, whisper_transformers
     
+
+    def load_aligning_model(self, language, device= device):
+        self.aligning_models[language] = whisperx.load_align_model(language_code= language, device=device) 
+
+
     def reset_pipe(self):
         self.pipe = pipeline("automatic-speech-recognition",
                         model= self.model,
                         tokenizer=self.processor.tokenizer,
                         feature_extractor=self.processor.feature_extractor,
                         torch_dtype=torch.float16,
-                        device= device)
+                        device= self.device)
     
     def transcribe(self, audio_data: Union[str, np.ndarray, torch.Tensor], return_word_timestamps: bool = False, **kwargs):
         """
@@ -212,13 +234,23 @@ class STT_model():
                 if isinstance(audio_data, str):
                     data, fs = librosa.load(audio_data, sr= 16000, dtype= np.float32, mono= True)
                 with torch.no_grad():
-                    input_features = self.processor(data, return_tensors='pt', sampling_rate=16000).input_features.to(device)
+                    input_features = self.processor(data, return_tensors='pt', sampling_rate=16000).input_features.to(self.device)
                     output = self.model.generate(input_features, **kwargs)
                     result = self.processor.decode(output[0].squeeze(), skip_special_tokens=True, normalize=True) # text
-        elif self.model == 'whisper-openai':
+        elif self.model_type == 'whisper-openai':
             result = self.model.transcribe(audio_data, word_timestamps = return_word_timestamps, **kwargs) #for faster whisper BinaryIO is acceptable either
+        elif self.model_type == 'whisperX':
+            result = self.model.transcribe(audio_data, **kwargs)
+            if return_word_timestamps:
+                language = result["language"]
+                if language not in self.aligning_models:
+                    self.load_aligning_model(language = language)
+                result_alignment = whisperx.align(result["segments"], self.aligning_models[language][0], 
+                                        self.aligning_models[language][1], audio_data, 
+                                        self.device, return_char_alignments=False)
+                result = (result, result_alignment)
         else:
-            result, info = self.model.transcribe(audio_data, word_timestamps = return_word_timestamps, **kwargs) #for faster whisper BinaryIO is acceptable either
+            result, _ = self.model.transcribe(audio_data, word_timestamps = return_word_timestamps, **kwargs) #for faster whisper BinaryIO is acceptable either
             result = list(result)
         return result
 
