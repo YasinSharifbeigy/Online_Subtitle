@@ -6,6 +6,9 @@ import librosa
 import torch
 import time 
 
+
+
+
 class online_processor():
     def __init__(self):
         self.STT_model_persian = STT_model()
@@ -21,6 +24,8 @@ class online_processor():
         self.alllangs = ['pes_Arab', 'eng_Latn', 'arb_Arab']
         self.last_lang = 'fa'
     
+
+
     def initialize(self):
         #load models
         print("initialization ...")
@@ -43,14 +48,15 @@ class online_processor():
         _, _ = self.Translator_model.translate(result[0]['segments'][0]['text'], self.langs)
         print("initialization done!\n")
 
-    async def insert_audio():
-        pass
+
 
     def pre_process_iter(self, audio):
         speech_timestamps = self.VAD_model.get_timestamps(audio)
         print("preprocess:", speech_timestamps)
         return speech_timestamps
-    
+
+
+
     def process_iter(self, audio, voice_activity, lid_min_pob= 0.4, max_nonactivity_threshold = 0.5, max_audio_length = 8, min_audio_length = 2):
         lang, lang_prob = self.LID_model.predict_language(torch.from_numpy(audio), langs= 'razi') 
         if lang_prob > lid_min_pob: 
@@ -74,8 +80,9 @@ class online_processor():
         if self.last_lang == 'fa':
             STT_out = self.STT_model_persian.transcribe(audio, True, **{"language": "fa"})
             STT_model_type = self.STT_model_persian.model_type
-            print("process_on:STT_OUT:  ", STT_out[0]['segments'][0]['text'])
-            print("process_on:STT_OUT:  ", STT_out[1])
+            # print("process_on:STT_OUT:  ", STT_out)
+            # print("process_on:STT_OUT:  ", STT_out[0]['segments'][0]['text'])
+            # print("process_on:STT_OUT:  ", STT_out[1])
         else:
             STT_out = self.STT_model.transcribe(audio, True, **{"language": self.last_lang})
             STT_model_type = self.STT_model.model_type
@@ -95,16 +102,25 @@ class online_processor():
             translation = dict()
         return src_lang, transcription, translation, next_begin
 
+
+
+
+
+
 def STT_output_to_text(STT_out, model_name = "faster_whisper"):
     if "faster" in model_name:
         text = ""
         for segment in STT_out:
             text += segment.text
     elif model_name == "whisperX":
-        text = STT_out[0]['segments'][0]['text']
+        text = ""
+        if len(STT_out[0]['segments']):
+            text = STT_out[0]['segments'][0]['text']
     elif model_name == "openai":
         text = STT_out['text']
     return text
+
+
 
 def del_last_words(STT_out, n = 2, model_name = "faster_whisper"):
     if "faster" in model_name:
@@ -124,21 +140,25 @@ def del_last_words(STT_out, n = 2, model_name = "faster_whisper"):
             text = " ".join(text[:-n])
             end = words[-n-1].end #+ segment.words[-2].start/2
     elif model_name == "whisperX":
-        text = ""
-        text_temp = STT_out[0]['segments'][0]['text']
-        end = 0
-        words = []
-        deleted_text = ""
-        for segment in STT_out[1]['segments']:
-            words += segment['words']
-        if text_temp: deleted_text = segment['text']
-        num_words = len(words)
-        if(num_words == 0): end = None
-        elif(num_words > n):
-            text = text_temp.split(" ")
-            deleted_text = " ".join(text[-n:])
-            text = " ".join(text[:-n])
-            end = words[-n-1]['end'] /2 + words[-n]['start']/2
+        text = text_temp = ""
+        if not len(STT_out[0]['segments']):
+            text = text_temp = ""
+            end = None
+        else:
+            text_temp = STT_out[0]['segments'][0]['text']
+            end = 0
+            words = []
+            deleted_text = ""
+            for segment in STT_out[1]['segments']:
+                words += segment['words']
+            if text_temp: deleted_text = segment['text']
+            num_words = len(words)
+            if(num_words == 0): end = None
+            elif(num_words > n):
+                text = text_temp.split(" ")
+                deleted_text = " ".join(text[-n:])
+                text = " ".join(text[:-n])
+                end = words[-n-1]['end'] /2 + words[-n]['start']/2
     elif model_name == "openai":
         text = ""
         deleted_text = STT_out['text']
