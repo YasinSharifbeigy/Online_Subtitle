@@ -1,4 +1,4 @@
-# Live Transcription and Translation WebSocket Application
+# Live Audio Transcription and Translation
 
 This project provides real-time transcription and translation of audio sent from a client (web) to a server (Python). The client records audio, sends it to the server for processing, and displays subtitles in selected languages. The application currently supports English, Persian, and Arabic, with potential for future language expansion.
 
