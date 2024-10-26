@@ -1,91 +1,102 @@
-# Live Transcription Project
+# Live Transcription and Translation WebSocket Application
 
-This project provides a Python-based solution for real-time audio transcription using multiple libraries for speech processing, AI, and machine learning. It supports both Linux and Windows environments and includes GPU acceleration with CUDA 12.2 for enhanced performance.
+This project provides real-time transcription and translation of audio sent from a client (web) to a server (Python). The client records audio, sends it to the server for processing, and displays subtitles in selected languages. The application currently supports English, Persian, and Arabic, with potential for future language expansion.
 
 ## Features
-- Real-time transcription using OpenAI's Whisper and Faster Whisper.
-- Voice activity detection with Silero VAD.
-- Pre-trained models for NLP and speech recognition with Huggingface Transformers.
-- Speech processing and feature extraction using Librosa and PyTorch.
-- Support for both CPU and GPU (CUDA 12.2) environments.
+- Real-time audio transcription and translation
+- Multiple language support with selectable subtitles
+- Continuous subtitle display with language choice
 
-## Prerequisites
+## Components
+- **Server**: `stream_server.py` - Python WebSocket server for processing audio and returning transcription and translation.
+- **Client**: `stream_client.html` - Web client that records audio and displays subtitles in selected languages.
+- **Shell Scripts**:
+  - `install-requirements.sh`: Installs the required Python packages.
+  - `start.sh`: Sets the necessary CUDA libraries and starts the server.
 
-### CUDA (Optional for GPU support)
-To enable GPU acceleration, you need to install the NVIDIA CUDA Toolkit. This project is compatible with:
-- **CUDA 12.2** (for GPU acceleration)
-- Ensure you have CUDA drivers installed for your GPU. Refer to [CUDA installation instructions](https://developer.nvidia.com/cuda-toolkit) for details.
+## Setup and Installation
 
-### Python Version
-This project requires **Python 3.8 or higher**.
-
-## Installation
-
-### Step 1: Clone the repository
-First, clone the repository from GitHub:
+1. Clone the repository:
     ```bash
-    git clone https://github.com/yourusername/yourprojectname.git
-    cd yourprojectname
+    git clone <repository-url>
+    cd <repository-folder>
     ```
 
-### Step 2: Install the required libraries
+2. Run the installation script to install dependencies:
+    ```bash
+    chmod +x install-requirements.sh
+    ./install-requirements.sh
+    ```
+   > **Note**: The `install-requirements.sh` script installs dependencies from `requirements.txt` and upgrades `faster-whisper` to the latest version, which may cause an error with WhisperX. Ignore this error as it does not impact the functionality of the project.
 
-The libraries used in this project are listed in the requirements.txt file. You can install them using pip.
-#### For Linux (with CUDA 12.2 support)
+3. Before running the server, ensure necessary CUDA libraries are available by setting `LD_LIBRARY_PATH`:
+    ```bash
+    chmod +x start.sh
+    ./start.sh
+    ```
+   > **Note**: Running `start.sh` will export the `LD_LIBRARY_PATH` using `nvidia.cublas.lib` and `nvidia.cudnn.lib` paths for CUDA compatibility.
+
+## Usage
+You have two options for running the project:
+
+1. **Using `start.sh`**:
+Run the `start.sh` script, which sets the `LD_LIBRARY_PATH`, starts the server, and opens the client in your default web browser.
+
+    ```bash
+    ./start.sh
+    ```
+
+2. **Manual Start**:
+    - **Start the Server**:
+    Alternatively, you can run the server directly:
+        ```bash
+        python3 stream_server.py
+        ```
+        You can customize the behavior of the server by using the following command-line arguments when running stream_server.py:
+
+        - `--interface`:
+        Specify the server interface to bind to. Default is `0.0.0.0`.
+
+        - `--port`:
+        Specify the port number for the server. Default is `2800`.
+
+        - `--open_browser`:
+        Set to True to open the browser automatically if the server starts successfully. Default is `True`.
+
+    - **Open the Client**:
+        - Open `stream_client.html` in a browser (using `http://localhost:2800`).
+        - Select up to three languages for subtitles from the dropdown menu. The client will display subtitles as the server processes incoming audio.
+
+## Project Structure
+```plaintext
+.
+├── stream_server.py          # Python WebSocket server
+├── stream_client.html        # Web client for recording and displaying subtitles
+├── requirements.txt          # List of required Python packages
+├── install-requirements.sh   # Shell script for installing dependencies
+└── start.sh                  # Shell script for setting LD_LIBRARY_PATH and running the server
+```
+## Troubleshooting
+
+- **Permissions**:
+If `install-requirements.sh` or `start.sh` scripts cannot execute, ensure they have proper permissions:
+
+    ```bash
+
+    chmod +x install-requirements.sh start.sh
+    ```
+
+- **WebSocket Connection**:
+Ensure that `stream_server.py` is running on the same network and accessible via `ws://localhost:2800`.
+
+- **Loading CUDA libraries**:
+If you encounter the following error:
+
+```arduino
+Unable to load any of {libcudnn_cnn.so.9.1.0, libcudnn_cnn.so.9.1, libcudnn_cnn.so.9, libcudnn_cnn.so}
+```
+
+Ensure that you have set the `LD_LIBRARY_PATH` correctly, either by running the `start.sh` script or manually exporting the path by executing the following command in your terminal:
 ```bash
-pip install -r requirements.txt
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu122
+export LD_LIBRARY_PATH=`python3 -c 'import os; import nvidia.cublas.lib; import nvidia.cudnn.lib; print(os.path.dirname(nvidia.cublas.lib.__file__) + ":" + os.path.dirname(nvidia.cudnn.lib.__file__))'`
 ```
-#### For Windows (with CUDA 12.2 support)
-```bash
-pip install -r requirements.txt
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu122
-```
-If you don't need GPU support (CPU-only), you can install PyTorch without specifying the CUDA version:
-```bash
-pip install torch torchvision torchaudio
-```
-
-### Step 3: Verify Installation
-You can verify that PyTorch is using your GPU (if available) with this simple Python command:
-```python
-
-import torch
-print(torch.cuda.is_available())  # Should return True if CUDA is available
-```
-
-### Step 4: Run the Project
-Once all dependencies are installed, you can run the live transcription script:
-```bash
-python live_transcription.py
-```
-Ensure that your audio input device (e.g., microphone) is properly configured for real-time processing.
-
-## Supported Libraries
-- [PyTorch](https://pytorch.org/) - For machine learning and deep learning models.
-- [Librosa](https://librosa.org/) - For audio feature extraction.
-- [SpeechBrain](https://speechbrain.github.io/) - For speech processing.
-- [Whisper](https://github.com/openai/whisper) - For transcription using OpenAI models.
-- [Faster Whisper](https://github.com/guillaumekln/faster-whisper) - Optimized transcription models.
-- [Silero VAD](https://github.com/snakers4/silero-vad) - For voice activity detection.
-- [CTranslate2](https://github.com/OpenNMT/CTranslate2): Optimized inference engine supporting CUDA.
-- [Transformers]: For pre-trained NLP models.
-- [FastText](https://fasttext.cc/): For fast and efficient text classification and word representation.
-- [SentencePiece](https://github.com/google/sentencepiece): For tokenization.
-- [NLTK](https://www.nltk.org/): For natural language processing.
-- [OpenAI Whisper](https://github.com/openai/whisper): For transcription using Whisper models.
-- And more...
-
-## Contribution
-
-Feel free to contribute to this project by opening a pull request or reporting issues.
-
-## License
-
-This project is licensed under the MIT License. See the LICENSE file for details.
-
-```javascript
-This `README.md` should now display correctly, with all sections and code blocks formatted as intended. It includes the installation instructions for both Linux and Windows with CUDA 12.2 support, ensuring the document flows smoothly without disjointed parts.
-```
-
-
