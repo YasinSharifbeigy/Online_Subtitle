@@ -13,6 +13,8 @@ from speechbrain.inference.classifiers import EncoderClassifier
 import whisperx
 import torchaudio
 
+
+
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 
@@ -194,7 +196,6 @@ class STT_model():
                 self.model = faster_whisper.WhisperModel(path_or_size, device= device, 
                                                          local_files_only= self.local, download_root= self.cache_path)
             elif self.model_type == "whisperX":
-                os.system("./start.sh")
                 path_or_size = self.cache_path if self.local else self.model_size
                 try:
                     self.model = whisperx.load_model(path_or_size, device= 'cuda', compute_type= "float16", asr_options= {"hotwords": None})

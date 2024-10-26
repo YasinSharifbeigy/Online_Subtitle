@@ -28,8 +28,6 @@ indexes = {1: 'first', 2: 'second', 3: 'third'}
 
 def empty_queue(q: asyncio.Queue):
   while not q.empty():
-    # Depending on your program, you may want to
-    # catch QueueEmpty
     q.get_nowait()
     q.task_done()
 
@@ -159,6 +157,11 @@ async def start():
     # logger.addHandler(logging.StreamHandler())
     logging.basicConfig(level=logging.INFO)
     
+    args = type('', (), {})()
+
+    args.interface = os.environ.get('VOSK_SERVER_INTERFACE', '0.0.0.0')
+    args.port = int(os.environ.get('VOSK_SERVER_PORT', 2800))
+
     print("initialing ...")
 
     processor = online_processor()
