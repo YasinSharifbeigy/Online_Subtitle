@@ -189,14 +189,13 @@ class STT_model():
         # print(self.local, self.model_size, self.model_type, self.cache_path, fine_tuned, STT_MODELs_LOCAL_PATH)
         try:
             if self.model_type == "faster-whisper":
-                os.system("./start.sh")
+                # os.system("./start.sh")
                 path_or_size = self.cache_path if self.local else self.model_size
                 self.model = faster_whisper.WhisperModel(path_or_size, device= device, 
                                                          local_files_only= self.local, download_root= self.cache_path)
             elif self.model_type == "whisperX":
                 os.system("./start.sh")
                 path_or_size = self.cache_path if self.local else self.model_size
-                print("path_or_size = ", path_or_size)
                 try:
                     self.model = whisperx.load_model(path_or_size, device= 'cuda', compute_type= "float16", asr_options= {"hotwords": None})
                 except:

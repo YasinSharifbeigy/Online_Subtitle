@@ -2,23 +2,15 @@
 numpy>=1.17.0
 librosa>=0.10
 websockets>=11.0
-downloader>=0.5
+robust_downloader
 
 # PyTorch and CUDA 12.2 support
 torch>=2.1.1+cu122
 torchaudio>=2.1.0
 
-# Machine Learning Libraries
-ctranslate2[cuda]>=4.0,<5
-transformers[torch]>=4.30.0
-fasttext>=0.9.2
-sentencepiece>=0.1.91
-nltk>=3.6.7
-
 # Whisper (OpenAI and Faster Whisper)
 openai-whisper>=0.0.1
 -e git+https://github.com/m-bain/whisperX.git#egg=whisperX
-faster-whisper>=1.0.3
 
 # Voice Activity Detection
 silero_vad>=0.4
@@ -34,3 +26,10 @@ tqdm>=4.42.0
 SoundFile; sys_platform == 'win32'  # Only for Windows
 hyperpyyaml>=0.0.1
 pybind11>=2.6.0
+
+# Machine Learning Libraries
+ctranslate2[cuda]>=4.0,<5
+transformers[torch]>=4.30.0
+fasttext>=0.9.2
+sentencepiece>=0.1.91
+nltk>=3.6.7
