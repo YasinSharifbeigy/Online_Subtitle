@@ -2,10 +2,12 @@
 
 import json
 import os
+import argparse
 import asyncio
 import websockets
 import concurrent.futures
 import logging
+import webbrowser
 import numpy as np
 import time
 import threading
@@ -145,7 +147,7 @@ async def recognize(websocket, path):
 
 
 async def start():
-    print("first of start ....")
+    # print("first of start ....")
     global processor
     global args
     global pool
@@ -156,11 +158,6 @@ async def start():
     # logger.setLevel(logging.INFO)
     # logger.addHandler(logging.StreamHandler())
     logging.basicConfig(level=logging.INFO)
-    
-    args = type('', (), {})()
-
-    args.interface = os.environ.get('VOSK_SERVER_INTERFACE', '0.0.0.0')
-    args.port = int(os.environ.get('VOSK_SERVER_PORT', 2800))
 
     print("initialing ...")
 
@@ -173,9 +170,29 @@ async def start():
 
     print("\n \n ------ models loaded ----- \n \n")
     async with websockets.serve(recognize, args.interface, args.port):
+        if args.open_browser:
+                open_url = 'file://' + os.getcwd() + '/stream_client.html'
+                webbrowser.open_new_tab(open_url)
         await asyncio.Future()
 
 
 if __name__ == '__main__':
-    print("first of main ....")
+    # print("first of main ....")
+    global args
+
+    parser = argparse.ArgumentParser()
+
+    # Retrieve environment variables as defaults if set, or use explicit defaults otherwise
+    default_interface = os.environ.get('SERVER_INTERFACE', '0.0.0.0')
+    default_port = int(os.environ.get('SERVER_PORT', 2800))
+    default_open_browser = os.environ.get('OPEN_BROWSER', 'True').lower() in ['true', '1', 'yes']
+
+    # Define command-line arguments
+    parser.add_argument('--interface', default=default_interface, help="Server interface to bind to")
+    parser.add_argument('--port', type=int, default=default_port, help="Port number for the server")
+    parser.add_argument('--open_browser', type=lambda x: x.lower() in ['true', '1', 'yes'], default=default_open_browser, help="Open browser if set to True")
+
+    # Parse arguments
+    args = parser.parse_args()
+
     asyncio.run(start())
