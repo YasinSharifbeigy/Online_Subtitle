@@ -1,4 +1,3 @@
-.gitignore
 .cache/
 __pycache__/
 help.sh
