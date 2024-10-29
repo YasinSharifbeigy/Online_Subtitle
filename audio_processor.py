@@ -21,6 +21,11 @@ device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 class VAD():
     def __init__(self, load_model_flag= False, model = None, vad_thread_num= 1):
+        """
+        load_model_flag: boolian variable. default value = False. If et True it loads model usinf load_model() function.
+        model: If you have another loaded model you can pass it to Class using this. Default value = None. If you set thisparameter It doesn't load model anymore.
+        vad_thread_num: It specify number of threads for torch. default value = 1.
+        """
         self.model = None 
         self.utils = None
         torch.set_num_threads(vad_thread_num)
@@ -34,6 +39,10 @@ class VAD():
 
 
     def load_model(self):
+        """
+        It will download models to ".cache/silero-vad-v5" or load it from here. 
+        It doesn't have any input argument.
+        """
         try:
             self.model, self.utils = torch.hub.load(trust_repo=True, skip_validation=True,
                                                             repo_or_dir="snakers4/silero-vad", model="silero_vad", onnx=False)
@@ -50,6 +59,9 @@ class VAD():
 
 
     def is_loaded(self):
+        """
+        Check if model is loaded or not! -> bool
+        """
         if self.model is None:
             return False
         return True
@@ -58,7 +70,9 @@ class VAD():
 
     def get_confidence(self, audio_data, sr= 16000):
         """
-        audio_data: torch.tensor - single channel, dtype = float16 or float32
+        It returns confidence(a number in [0,1]) which shows How surely we can say there is non silence parts in the input audio.
+        audio_data: input audio. Input audio must be in torch.tensor() type, single channel and It's dtype should be float16 or float32.
+        sr: sample rate of the audio_data, by default is set to 16000.
         """
         confdences = self.model.audio_forward(audio_data, sr=sr)
         return confdences.squeeze().mean() #a number representing confidence for all of audio
@@ -67,7 +81,8 @@ class VAD():
 
     def get_timestamps(self, audio_data):
         """
-        audio_data: np.numpy or torch.tensor - single channel
+        audio_data: input audio. It's type can be np.numpy.ndarray() or either torch.tensor() - It must be single channel.
+        output: audio_timestamps. List of dictionaries which contains start and stop of non silence parts.
         """
         speech_timestamps = get_speech_timestamps(audio_data, self.model)
         return speech_timestamps #dict : [{'start':, 'end':}, ..] if audio is not silence else []
@@ -75,6 +90,12 @@ class VAD():
 
 
     def cut_silence(self, audio_data, speech_timestamps= None):
+        """
+        audio_data: input audio. It's type can be np.numpy.ndarray() or either torch.tensor() - It must be single channel.
+        speech_timestamps: List of dictionaries which contains start and stop of non silence parts. Set this to None to get timestamps automaticly. default value = None.
+        
+        Output: An array in type of nput array which doesn't have silence part!
+        """
         if speech_timestamps is not None:
             output_audio = collect_chunks(speech_timestamps, audio_data)
         else:
@@ -91,6 +112,10 @@ class VAD():
 
 class LID():
     def __init__(self, load_model_flag = False, model = None):
+        """
+        load_model_flag: boolian variable. default value = False. If et True it loads model usinf load_model() function.
+        model: If you have another loaded model you can pass it to Class using this. Default value = None. If you set thisparameter It doesn't load model anymore.
+        """
         self.model = None 
         self.cache_vad_path = Path(Path.cwd() / ".cache" / "lid")
         if model is not None:
@@ -103,6 +128,10 @@ class LID():
 
 
     def load_model(self):
+        """
+        It will download models to ".cache/lid" or load it from here. 
+        It doesn't have any input argument.
+        """
         try:
             self.model = EncoderClassifier.from_hparams(source="speechbrain/lang-id-voxlingua107-ecapa", savedir=".cache/lid/lang-id-voxlingua107-ecapa", run_opts={"device":device})
         except Exception as e:
@@ -113,9 +142,9 @@ class LID():
 
     def predict_language(self, audio_data, langs = None, format = 'ISO'):
         """
-        audio_daya: torch.tensor single channle whth 16000 samplerate
-        langs : list of ISO or FLORES 200 type languages, None(defualt) for auto, 'razi' for Razi format
-        format : auto, 
+        audio_data: must be torch.tensor(), single channle with 16000 samplerate
+        langs : If set to None (default value) it will return language of the the audio or else It can be list of ISO or FLORES 200 type languages which predict the language between this list or it can be set to 'razi' which select language between Persian, English and Arabic.
+        format : language format of languages in langs. default value = 'Iso' 
         """
         prediction =  self.model.classify_batch(audio_data)
         if langs is None:
@@ -148,6 +177,10 @@ STT_MODELs_LOCAL_PATH = {}
 
 class STT_model():
     def __init__(self, model = None):
+        """
+        model: If you have loaded model you can pass it to Class using this. Default value = None.
+        to load model use load_model() function.
+        """
         self.model = model
         self.aligning_models = dict()
         self.utils = None
@@ -163,6 +196,14 @@ class STT_model():
 
 
     def load_model(self, model_type = None, fine_tuned = None, model_size = None, model_path = None, whisper_config_path = None, **kwargs):
+        """
+        model_type : Type of model that want to be loaded. Supported model_types are 'whisper-transformers', 'whisper-openai', 'faster-whisper' and 'whisperX'.It always must be set unless model_path is in STT_MODELs_LOCAL_PATH.
+        fine_tuned : Boolian argument. for each model_type we have some fine_tuned models. If you want to use these models set it True.
+        model_size : Size of whisper_model that want to be loaded. Supported model_sizes are 'tiny', 'base', 'small', 'medium', 'large', 'large-v2' and 'large-v3'.
+        model_path : str() type. If there is a local model that want to loaded you can pass it to this argument. If you set this, there is no need to set model_size and fine_tuned.
+        whisper_config_path : If you are using whisper-transformers type you can set generation_config of model by loading cofig from this path.
+        kwargs : If you are using whisper-transformers type you can set other loading parameters and If usinf whisperX and want to set language and device to load aligning model.
+        """
         self.model_type = model_type
         self.model_size = model_size
         if model_path is not None and (model_path in STT_MODELs_LOCAL_PATH or (self.cache_path + model_path) in STT_MODELs_LOCAL_PATH):
@@ -227,13 +268,17 @@ class STT_model():
             self.local = False
             print("Error loading STT model.")
             raise(e)
-            # segment = model.transcribe('test/test_per_2s.wav',beam_size=5, language= "fa",word_timestamps=True)
-            #{'text':, 'segments': [{'id':, 'start':, 'end':, 'text':, 'tokens':[], 'words':[{'word':, 'start':, 'end':, 'probablity':}, ...]}, ...]}
-        #load directly from huggingface for faster_whisper, whisper_openai, whisper_transformers
-    
+
 
 
     def load_align_model(self, language_code, device = device, model_name=None, model_dir=None):
+        """
+        It Loads aligning model for whisperX type models.
+        language_code: ISO language format.
+        device: 'cuda' or 'cpu'. default value set automaticly based on hardware capabilities.
+        model_name: wavw2vec model_name you want to be loaded. It must be in torchaudio available models or be available in huggingface. If It's set to None, It will be set automaticly. default value = None.
+        model_dir: str() where to save and load model. If it's set to None model will be saved in '.cache/wav2vec' diractory. Default value = None.
+        """
         if model_name is None:
             # Use default model
             if language_code in whisperx.alignment.DEFAULT_ALIGN_MODELS_TORCH:
@@ -286,6 +331,9 @@ class STT_model():
 
 
     def reset_pipe(self):
+        """
+        This method build and rebuld the pipline If you are using whisper-transformers model type. -> None
+        """
         self.pipe = pipeline("automatic-speech-recognition",
                         model= self.model,
                         tokenizer=self.processor.tokenizer,
@@ -297,13 +345,24 @@ class STT_model():
 
     def transcribe(self, audio_data: Union[str, np.ndarray, torch.Tensor], return_word_timestamps: bool = False, **kwargs):
         """
-        model_type == 'whisper-transformers' and return_word_timestamps == True:
+        Function for transcribing the audio.
+        audio_data: Path to audio (.wav or .mp3) in type of str() ar array representing data in type of np.ndarray() or torch.tensor()
+        return_word_timestamps: Boolian parameter. default value = None. if you want to return word timestamps set it to True.
+        kwargs: other arguments for transcribing for each model_type.
+
+        Output format: 
+        if: model_type == 'whisper-transformers' and return_word_timestamps == True:
             result = {'text': , 'chunks': [{'text': , 'timestamp': (start, end)}, ...]}
-        model_type == 'whisper-transformers' and return_word_timestamps == False:
+        if: model_type == 'whisper-transformers' and return_word_timestamps == False:
             result = Text
-        model_type == 'whisper-openai':
+        if: model_type == 'whisperX' and return_word_timestamps == False:
+            result = {'segments': [{'text': , 'start': , 'end': , 'clean_char': [], 'clean_cdx': [], 'clean_wdx': [], 'sentence_spans': [(,), ...]}, ...], 'language': }
+        if: model_type == 'whisper-transformers' and return_word_timestamps == True:
+            result = (result of whisperX model which is looks like above, whisperX alignment model result)
+            alignment model result : {'segments': [{'start': , 'end': , 'text': '' , 'words': [{'word': '', 'start': , 'end': , 'score': }, ...]}
+        if: model_type == 'whisper-openai':
             result = {'text':, 'segments': [{'id':, 'start':, 'end':, 'text':, 'tokens':[], 'words':[{'word':, 'start':, 'end':, 'probablity':}, ...]}, ...]}
-        model_type == 'faster-whisper':
+        if: model_type == 'faster-whisper':
             result = [Segment(id=, start=, end=, text= '', tokens = [], ..., words=[Word(start= , end= , word='', probability=), ...]), ...]
         """
         if self.model_type == 'whisper-transformers':
@@ -334,14 +393,4 @@ class STT_model():
             result, _ = self.model.transcribe(audio_data, word_timestamps = return_word_timestamps, **kwargs) #for faster whisper BinaryIO is acceptable either
             result = list(result)
         return result
-
-
-
-
-
-
-class STT_process(STT_model):
-    def __init__(self, use_LID, lan, LID_threshold):
-        super().__init__()
-        self.lan = None
 
