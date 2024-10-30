@@ -14,8 +14,14 @@ import ctranslate2
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
+
+
 class Tokenizer():
     def __init__(self, model_apth: Union[str, Path] = "auto", load_model_flag: bool = True) -> None:
+        """
+        model_path: where to download and load tokenizer. if its set "auto" model will downloaded to ".cache/nltk".
+        load_model_flag: boolian variable. if True punkt will be downloaded if its not available.
+        """
         self.NLTK_LANGUAGE_CODES = {key: value for keys, value in helper.NLTK_LANGUAGE_CODES_GROUPED.items() for key in keys}
         self.nltk_path = Path(Path.cwd() / ".cache" / "nltk")
         if load_model_flag:
@@ -26,6 +32,9 @@ class Tokenizer():
         return self.NLTK_LANGUAGE_CODES.get(input_code.lower(), "English")
     
     def load_model(self, nltk_path: Union[str, Path] = 'auto') -> None:
+        """
+        download punkt to nltk_path. It nltk_path is set to "auto" It woll be downloaded to to ".cache/nltk".
+        """
         if nltk_path != 'auto' and isinstance(nltk_path, str):
             self.nltk_path = Path(nltk_path)
         elif nltk_path != "auto": self.nltk_path = nltk_path
@@ -39,11 +48,20 @@ class Tokenizer():
                 nltk.download('punkt', download_dir=str(self.nltk_path.resolve()))
                 
     def split_to_sentence(self, text, language='english') -> List[str]:
+        """
+        Splits iput text into sentences based on language. default language = 'english'.
+        """
         nltk_sentence_split_lang = self.get_nltk_language_code(language).lower()
         return nltk.tokenize.sent_tokenize(text, language=nltk_sentence_split_lang)
 
+
+
 class LID():
     def __init__(self, model_path: Union[str, Path] = "auto", load_model_flag: bool = True) -> None:
+        """
+        model_path: where to download and load LID model. if its set "auto" model will downloaded to ".cache/lid".
+        load_model_flag: boolian variable. if True punkt will be downloaded if its not available.
+        """
         if model_path == "auto": self.model_path = Path(Path.cwd() / ".cache" / "lid")
         else: 
             self.model_path = self.model_path = model_path
@@ -52,6 +70,9 @@ class LID():
             self.load_model(model_path)
 
     def load_model(self, model_path: Union[str, Path] = "auto"):
+        """
+        download or load model from model_path. If model_path is set to "auto" model will be downloaded to ".cache/lid"
+        """
         if model_path != "auto" and isinstance(model_path, str):
             self.model_path = Path(model_path)
         elif model_path != "auto": self.model_path = model_path
@@ -63,16 +84,24 @@ class LID():
         self.model = fasttext.load_model(str(pretrained_lang_model_file.resolve()))
 
     def classify(self, text: str):
+        """
+        predicts language of input text.
+        """
         text = text.replace("\n", " ")
         predictions = self.model.predict(text, k=1)
         return predictions[0][0].replace('__label__', '')
 
+
+
 class Translator():
-    def __init__(self, size = "small", compute_type = "float32", 
-                 translator_path: Union[str, Path]= "auto", 
-                 sentencepiece_path: Union[str, Path]= "auto", 
+    def __init__(self, size = "small",  
                  sentence_splitor: Union[str, Tokenizer] = "auto", 
                  language_identifire: Union[str, LID] = "auto") -> None:
+        """
+        size: size of translator model (NLLB). Default value = small.
+        sentence_splitor: an instance of Tokenizer class or path to tokenizer. if set to "auto", It will build an object of Tokenizer by default settings.
+        language_identifire: an instance of LID class or path to LID. if set to "auto", It will build an object of LID by default settings.
+        """
         self.translator_path = Path(Path.cwd() / ".cache" / "nllb200_ct2")
         self.sentencepiece_path = Path(self.translator_path / "flores200_sacrebleu_tokenizer_spm.model")
         self.translator_path = Path(self.translator_path / size)
@@ -85,7 +114,14 @@ class Translator():
     
     def load_model(self, size = "small", compute_type = "float32", 
                    translator_path: Union[str, Path]= "auto", 
-                 sentencepiece_path: Union[str, Path]= "auto"):
+                   sentencepiece_path: Union[str, Path]= "auto"):
+        """
+        loads translator and sentencepiece models.
+        size:  size of translator model (NLLB). Default value = small.
+        compute_type: comput type of the translator model. Default value = float32.
+        translator_path: where to download and load translator model. IF set to "auto" model will be loaded to f".cache/nllb200_ct2/{size}".
+        sentencepiece_path: where to download and load sentencepiece model. IF set to "auto" model will be loaded to ".cache/nllb200_ct2".
+        """
         if translator_path == "auto":
             self.translator_path = Path(Path.cwd() / ".cache" / "nllb200_ct2" / size)
         elif isinstance(translator_path, str): self.translator_path = Path(translator_path)
@@ -117,6 +153,18 @@ class Translator():
 
 
     def translate(self, text: str, tar_lang: Union[str, List[str]], src_lang: str = "auto", split_sentence = True, as_iso1=False):
+        """
+        Translates the input text to target languages.
+        text: An string as input text.
+        tar_lang: target languages. It can be a single language (in type of str()) or list of languages. language format must be Flore 200 or ISO1. If language fornat is ISO1 as_aso1 must be set True.
+        src_lang: source language. I must be in the same language format as tar_lang. if set "auto" It will use LID to identify language automatically. Default value = "auto".
+        split_sentence: Boolian parameter. If set to True It will split text into sentences before translation (translation in batch mode). Default value = True.
+        as_iso1: Boolian parameter. if src_lang and tar_lang are in ISO1 format, It must be set True. Default value = False.
+
+        Outputs:
+        translation_multilang: A dictionary which contains translations. It's format is like {tar_lang[0]: translation, tar_lang[1]: translation, ...}
+        src_lang: source language which is determined by user or detected automatically by LID model.
+        """
         # print("tranlator: tar_lang = ", tar_lang)
         if as_iso1 and src_lang in helper.LANGUAGES_ISO1_TO_ISO3:
             src_lang = helper.LANGUAGES_ISO1_TO_ISO3[src_lang][0]
