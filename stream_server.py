@@ -45,7 +45,6 @@ async def manage_subtitle(websocket, text_dict: dict, audio_length):
 
 
 async def process(websocket, min_chunk = 1):
-    print(" ... start of process func ...")
     global audio_queue
     global audio_queue_length
     global start_time
@@ -100,8 +99,6 @@ def process_thread(websocket, min_chunk=1.5):
 
 
 async def recognize(websocket, path):
-    print("first of RECOGNIZE ....")
-    # time.sleep(3)
     global audio_queue
     global audio_queue_length
     global pool
@@ -147,7 +144,6 @@ async def recognize(websocket, path):
 
 
 async def start():
-    # print("first of start ....")
     global processor
     global args
     global pool
@@ -177,7 +173,6 @@ async def start():
 
 
 if __name__ == '__main__':
-    # print("first of main ....")
     global args
 
     parser = argparse.ArgumentParser()
