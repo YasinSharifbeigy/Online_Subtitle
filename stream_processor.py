@@ -51,7 +51,7 @@ class online_processor():
         s = time.time()
         result = self.STT_model_persian.transcribe(audio_test_persian, True, **{"language": "fa"})
         print("per_model: ", time.time()-s)
-        _, _ = self.Translator_model.translate(result[0]['segments'][0]['text'], self.langs)
+        _, _ = self.Translator_model.translate(result['text'], self.langs)
         print("initialization done!\n")
 
 
@@ -111,18 +111,16 @@ class online_processor():
 
         if self.last_lang == 'fa':
             STT_out = self.STT_model_persian.transcribe(audio, True, **{"language": "fa"})
-            STT_model_type = self.STT_model_persian.model_type
             # print("process_on:STT_OUT:  ", STT_out)
             # print("process_on:STT_OUT:  ", STT_out[0]['segments'][0]['text'])
             # print("process_on:STT_OUT:  ", STT_out[1])
         else:
             STT_out = self.STT_model.transcribe(audio, True, **{"language": self.last_lang})
-            STT_model_type = self.STT_model.model_type
         src_lang = helper.STREAM_SUPPURTED_LANGUAGES_FLORES_200[helper.ISO_LANGUAGES[self.last_lang]]
         
         if do_del_last_words:
-            transcription , _, next_begin = del_last_words(STT_out, 1, STT_model_type)
-        else: transcription = STT_output_to_text(STT_out, STT_model_type)
+            transcription , _, next_begin = del_last_words(STT_out, 1)
+        else: transcription = STT_out['text']
 
         if transcription:
             # transcription_senteces = self.Translator_model.sentence_splitor.split_to_sentence(self.textbuffer + transcription, src_lang)
@@ -138,7 +136,30 @@ class online_processor():
 
 
 
-def STT_output_to_text(STT_out, model_name = "faster_whisper"):
+def del_last_words(STT_out, n = 2):
+    """
+    Takes STT model's output and delete It's last n words of it.
+    n: number words that must be deleted.
+
+    Output:
+    text: Part of transcription that want to be kept.
+    deleted_text: Deleted Part of transcription.
+    end: end time of kept part of transcription.
+    """
+    text = ""
+    deleted_text = STT_out['text']
+    end = 0
+    num_words = len(STT_out['words'])
+    if(num_words == 0): end = None
+    elif(num_words > n):
+        text = deleted_text.split(" ")
+        deleted_text = " ".join(text[-n:])
+        text = " ".join(text[:-n])
+        end =STT_out['words'][-n-1]['end']/2 + STT_out['words'][-n]['start']/2
+    return text, deleted_text, end
+
+
+def STT_output_to_text_by_model(STT_out, model_name = "faster_whisper"):
     """
     Takes STT model's output and return transcription based on model_name -> str() 
     model_name: model type used for STT. must be chosen between faster_whisper, whisperX and openai.
@@ -157,7 +178,7 @@ def STT_output_to_text(STT_out, model_name = "faster_whisper"):
 
 
 
-def del_last_words(STT_out, n = 2, model_name = "faster_whisper"):
+def del_last_words_by_model(STT_out, n = 2, model_name = "faster_whisper"):
     """
     Takes STT model's output delete last n words of it.
     n: number words that must be deleted.

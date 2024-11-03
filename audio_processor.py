@@ -343,54 +343,112 @@ class STT_model():
     
 
 
-    def transcribe(self, audio_data: Union[str, np.ndarray, torch.Tensor], return_word_timestamps: bool = False, **kwargs):
+    def transcribe(self, audio_data: Union[str, np.ndarray, torch.Tensor], return_word_timestamps: bool = False, return_like_model_type: bool = False, **kwargs):
         """
         Function for transcribing the audio.
         audio_data: Path to audio (.wav or .mp3) in type of str() ar array representing data in type of np.ndarray() or torch.tensor()
         return_word_timestamps: Boolian parameter. default value = None. if you want to return word timestamps set it to True.
         kwargs: other arguments for transcribing for each model_type.
 
-        Output format: 
-        if: model_type == 'whisper-transformers' and return_word_timestamps == True:
-            result = {'text': , 'chunks': [{'text': , 'timestamp': (start, end)}, ...]}
-        if: model_type == 'whisper-transformers' and return_word_timestamps == False:
-            result = Text
-        if: model_type == 'whisperX' and return_word_timestamps == False:
-            result = {'segments': [{'text': , 'start': , 'end': , 'clean_char': [], 'clean_cdx': [], 'clean_wdx': [], 'sentence_spans': [(,), ...]}, ...], 'language': }
-        if: model_type == 'whisper-transformers' and return_word_timestamps == True:
-            result = (result of whisperX model which is looks like above, whisperX alignment model result)
-            alignment model result : {'segments': [{'start': , 'end': , 'text': '' , 'words': [{'word': '', 'start': , 'end': , 'score': }, ...]}
-        if: model_type == 'whisper-openai':
-            result = {'text':, 'segments': [{'id':, 'start':, 'end':, 'text':, 'tokens':[], 'words':[{'word':, 'start':, 'end':, 'probablity':}, ...]}, ...]}
-        if: model_type == 'faster-whisper':
-            result = [Segment(id=, start=, end=, text= '', tokens = [], ..., words=[Word(start= , end= , word='', probability=), ...]), ...]
+        Output format:
+        if return_like_model_type:
+            if: model_type == 'whisper-transformers' and return_word_timestamps == True:
+                result = {'text': , 'chunks': [{'text': , 'timestamp': (start, end)}, ...]}
+            if: model_type == 'whisper-transformers' and return_word_timestamps == False:
+                result = Text
+            if: model_type == 'whisperX' and return_word_timestamps == False:
+                result = {'segments': [{'text': , 'start': , 'end': , 'clean_char': [], 'clean_cdx': [], 'clean_wdx': [], 'sentence_spans': [(,), ...]}, ...], 'language': }
+            if: model_type == 'whisperX' and return_word_timestamps == True:
+                result = (result of whisperX model which is looks like above, whisperX alignment model result)
+                alignment model result : {'segments': [{'start': , 'end': , 'text': '' , 'words': [{'word': '', 'start': , 'end': , 'score': }, ...]}
+            if: model_type == 'whisper-openai':
+                result = {'text':, 'segments': [{'id':, 'start':, 'end':, 'text':, 'tokens':[], 'words':[{'word':, 'start':, 'end':, 'probablity':}, ...]}, ...]}
+            if: model_type == 'faster-whisper':
+                result = [Segment(id=, start=, end=, text= '', tokens = [], ..., words=[Word(start= , end= , word='', probability=), ...]), ...]
+        else:
+            if return_word_timestamps == True:
+                result = {'text': " ", 'words'= [{'word': , 'start' , 'end': }, ...]}
+            else:
+                result = {'text': " "}
         """
+        result = dict()
         if self.model_type == 'whisper-transformers':
             if return_word_timestamps:
                 if self.pipe is None: self.reset_pipe()
                 if isinstance(audio_data, torch.Tensor): audio_data = np.array(audio_data)
-                result = self.pipe(audio_data, return_timestamps = "word", generate_kwargs = kwargs)
+                model_result = self.pipe(audio_data, return_timestamps = "word", generate_kwargs = kwargs)
+                if return_like_model_type:
+                    result = model_result
+                else:
+                    result["text"] = model_result["text"]
+                    result["words"] = []
+                    for chunk in model_result["chunks"]:
+                        result["words"].append({"word": chunk["text"], 
+                                                "start": chunk["timestamp"][0], 
+                                                "end": chunk["timestamp"][1]})
             else:
                 if isinstance(audio_data, str):
                     data, fs = librosa.load(audio_data, sr= 16000, dtype= np.float32, mono= True)
                 with torch.no_grad():
                     input_features = self.processor(data, return_tensors='pt', sampling_rate=16000).input_features.to(self.device)
                     output = self.model.generate(input_features, **kwargs)
-                    result = self.processor.decode(output[0].squeeze(), skip_special_tokens=True, normalize=True) # text
+                    model_result = self.processor.decode(output[0].squeeze(), skip_special_tokens=True, normalize=True) # text
+                if return_like_model_type:
+                    result = model_result
+                else:
+                    result["text"] = model_result["text"]
         elif self.model_type == 'whisper-openai':
-            result = self.model.transcribe(audio_data, word_timestamps = return_word_timestamps, **kwargs) #for faster whisper BinaryIO is acceptable either
+            model_result = self.model.transcribe(audio_data, word_timestamps = return_word_timestamps, **kwargs) #for faster whisper BinaryIO is acceptable either
+            if return_like_model_type:
+                result = model_result
+            else:
+                result["text"] = model_result["text"]
+                if return_word_timestamps:
+                    result['words'] = []
+                    for segment in model_result['segments']:
+                        for word in segment['words']:
+                            result['words'].append({'word': word['word'], 
+                                                    'start': word['start'], 
+                                                    'end': word['end']})
         elif self.model_type == 'whisperX':
-            result = self.model.transcribe(audio_data, **kwargs)
+            model_result = self.model.transcribe(audio_data, **kwargs)
+            if return_like_model_type:
+                result = model_result
+            else:
+                result['text'] = ""
+                for segment in model_result['segments']:
+                    result['text'] += segment['text']
             if return_word_timestamps:
-                language = result["language"]
+                language = model_result["language"]
                 if language not in self.aligning_models:
                     self.load_align_model(language_code = language, device= self.device, model_dir= self.aligning_model_path)
-                result_alignment = whisperx.align(result["segments"], self.aligning_models[language][0], 
+                result_alignment = whisperx.align(model_result["segments"], self.aligning_models[language][0], 
                                         self.aligning_models[language][1], audio_data, 
                                         self.device, return_char_alignments=False)
-                result = (result, result_alignment)
+                if return_like_model_type:
+                    result = (result, result_alignment)
+                else:
+                    result['words'] = []
+                    for segment in result_alignment['segments']:
+                        for word in segment['words']:
+                            result['words'].append({'word': word['word'], 
+                                                    'start': word['start'], 
+                                                    'end': word['end']})
         else:
-            result, _ = self.model.transcribe(audio_data, word_timestamps = return_word_timestamps, **kwargs) #for faster whisper BinaryIO is acceptable either
-            result = list(result)
+            model_result, _ = self.model.transcribe(audio_data, word_timestamps = return_word_timestamps, **kwargs) #for faster whisper BinaryIO is acceptable either
+            model_result = list(model_result)
+            if return_like_model_type:
+                result = model_result
+            else:
+                result['text'] = ""
+                for segment in model_result:
+                    result['text'] += segment.text
+                if return_word_timestamps:
+                    result['words'] = []
+                    for segment in model_result:
+                        for word in segment.words:
+                            result['words'].append({'word': word.word, 
+                                                    'start': word.start, 
+                                                    'end': word.end})
         return result
 
